@@ -5,40 +5,35 @@ const livesDisplay = document.getElementById("lives");
 const levelDisplay = document.getElementById("level");
 const comboDisplay = document.getElementById("combo");
 const startButton = document.getElementById("startButton");
-const WIDTH = canvas.width;
-const HEIGHT = canvas.height;
-const floorY = HEIGHT - 45;
+const W = canvas.width;
+const H = canvas.height;
+const groundY = H - 45;
 let score = 0;
 let lives = 3;
 let level = 1;
 let combo = 0;
-let gameRunning = false;
+let running = false;
 let gameOver = false;
 let lastTime = 0;
 let hoopTimer = 0;
 let meteorTimer = 0;
-let particles = [];
-let stars = [];
-const keys = {};
-const player = {
-x: WIDTH / 2,
-y: floorY - 42,
-width: 42,
-height: 42,
-speed: 0.45,
-cooldown: 0
-};
 let balls = [];
 let hoops = [];
 let meteors = [];
-for (let i = 0; i < 90; i++) {
-stars.push({
-x: Math.random() * WIDTH,
-y: Math.random() * HEIGHT,
-size: Math.random() * 2.5 + 0.5,
-speed: Math.random() * 0.04 + 0.01
-});
-}
+let particles = [];
+const keys = {};
+const player = {
+x: W / 2,
+y: groundY - 25,
+speed: 360,
+cooldown: 0
+};
+const stars = Array.from({ length: 90 }, () => ({
+x: Math.random() * W,
+y: Math.random() * H,
+size: Math.random() * 2 + 1,
+speed: Math.random() * 15 + 8
+}));
 document.addEventListener("keydown", (event) => {
 keys[event.key.toLowerCase()] = true;
 if (event.code === "Space") {
@@ -59,185 +54,173 @@ score = 0;
 lives = 3;
 level = 1;
 combo = 0;
+running = true;
 gameOver = false;
-gameRunning = true;
 balls = [];
 hoops = [];
 meteors = [];
 particles = [];
-player.x = WIDTH / 2;
+player.x = W / 2;
 player.cooldown = 0;
+hoopTimer = 0;
+meteorTimer = 800;
 startButton.textContent = "Restart Game";
 updateStats();
-spawnHoop();
 }
 function shoot() {
-if (!gameRunning || gameOver || player.cooldown > 0) return;
+if (!running || gameOver || player.cooldown > 0) return;
 balls.push({
 x: player.x,
-y: player.y - 22,
+y: player.y - 35,
 radius: 10,
-speed: 7.5
+speed: 520
 });
-player.cooldown = 260;
+player.cooldown = 0.28;
 }
 function spawnHoop() {
-const size = Math.max(58, 90 - level * 3);
+const width = Math.max(60, 105 - level * 4);
 hoops.push({
-x: Math.random() * (WIDTH - size - 100) + 50,
-y: -35,
-width: size,
+x: Math.random() * (W - width - 80) + 40,
+y: -40,
+width,
 height: 12,
-speed: 1.2 + level * 0.18,
-passed: false
+speed: 75 + level * 8,
+scored: false
 });
 }
 function spawnMeteor() {
 meteors.push({
-x: Math.random() * (WIDTH - 50) + 25,
-y: -40,
-radius: Math.random() * 12 + 14,
-speed: 2 + level * 0.35,
-rotation: Math.random() * Math.PI
+x: Math.random() * (W - 40) + 20,
+y: -35,
+radius: 16 + Math.random() * 10,
+speed: 110 + level * 12,
+rotation: 0
 });
 }
-function update(delta) {
-if (!gameRunning || gameOver) return;
-const movement =
-keys["arrowleft"] || keys["a"]
-? -1
-: keys["arrowright"] || keys["d"]
-? 1
-: 0;
-player.x += movement * player.speed * delta;
-player.x = Math.max(25, Math.min(WIDTH - 25, player.x));
-if (player.cooldown > 0) {
-player.cooldown -= delta;
+function update(dt) {
+if (!running || gameOver) return;
+if (keys["arrowleft"] || keys["a"]) {
+player.x -= player.speed * dt;
 }
-hoopTimer -= delta;
-meteorTimer -= delta;
+if (keys["arrowright"] || keys["d"]) {
+player.x += player.speed * dt;
+}
+player.x = Math.max(25, Math.min(W - 25, player.x));
+player.cooldown = Math.max(0, player.cooldown - dt);
+hoopTimer -= dt;
+meteorTimer -= dt;
 if (hoopTimer <= 0) {
 spawnHoop();
-hoopTimer = Math.max(500, 1350 - level * 70);
+hoopTimer = Math.max(0.65, 1.4 - level * 0.05);
 }
 if (meteorTimer <= 0) {
 spawnMeteor();
-meteorTimer = Math.max(500, 1800 - level * 90);
+meteorTimer = Math.max(0.45, 1.6 - level * 0.06);
 }
-updateStars(delta);
-updateBalls(delta);
-updateHoops(delta);
-updateMeteors(delta);
-updateParticles(delta);
-level = Math.floor(score / 100) + 1;
-updateStats();
-}
-function updateStars(delta) {
-stars.forEach((star) => {
-star.y += star.speed * delta;
-if (star.y > HEIGHT) {
+for (const star of stars) {
+star.y += star.speed * dt;
+if (star.y > H) {
   star.y = -5;
-  star.x = Math.random() * WIDTH;
+  star.x = Math.random() * W;
 }
 
-});
 }
-function updateBalls(delta) {
-balls.forEach((ball) => {
-ball.y -= ball.speed * delta;
-});
-balls = balls.filter((ball) => ball.y > -30);
 for (const ball of balls) {
+ball.y -= ball.speed * dt;
+}
 for (const hoop of hoops) {
-const insideHoop =
-ball.x > hoop.x &&
-ball.x < hoop.x + hoop.width &&
-ball.y > hoop.y &&
-ball.y < hoop.y + hoop.height;
-  if (insideHoop && !hoop.passed) {
-    hoop.passed = true;
-    score += 25 + combo * 5;
-    combo++;
-
-    createExplosion(ball.x, ball.y, "#ffdc5e");
-    removeHoop(hoop);
-    break;
-  }
+hoop.y += hoop.speed * dt;
 }
-
-}
-}
-function updateHoops(delta) {
-hoops.forEach((hoop) => {
-hoop.y += hoop.speed * delta;
-});
-for (const hoop of hoops) {
-if (hoop.y > HEIGHT + 30 && !hoop.passed) {
-hoop.passed = true;
-combo = 0;
-removeHoop(hoop);
-}
-}
-}
-function updateMeteors(delta) {
-meteors.forEach((meteor) => {
-meteor.y += meteor.speed * delta;
-meteor.rotation += 0.03 * delta;
-const hitPlayer =
-  meteor.y + meteor.radius > player.y &&
-  meteor.y - meteor.radius < player.y + player.height &&
-  meteor.x + meteor.radius > player.x - player.width / 2 &&
-  meteor.x - meteor.radius < player.x + player.width / 2;
-
-if (hitPlayer) {
+for (const meteor of meteors) {
+meteor.y += meteor.speed * dt;
+meteor.rotation += dt * 2;
+if (circleHitsPlayer(meteor)) {
+  meteor.y = H + 100;
   lives--;
   combo = 0;
-  createExplosion(player.x, player.y, "#ff4d6d");
-  meteor.y = HEIGHT + 100;
-  updateStats();
+  explode(player.x, player.y, "#ff3d68");
 
   if (lives <= 0) {
     endGame();
   }
 }
 
-});
-meteors = meteors.filter((meteor) => meteor.y < HEIGHT + 80);
 }
-function updateParticles(delta) {
-particles.forEach((particle) => {
-particle.x += particle.velocityX * delta;
-particle.y += particle.velocityY * delta;
-particle.velocityY += 0.002 * delta;
-particle.life -= delta;
+checkBasketScored();
+balls = balls.filter((ball) => ball.y > -30);
+meteors = meteors.filter((meteor) => meteor.y < H + 80);
+hoops = hoops.filter((hoop) => {
+if (hoop.y > H + 40 && !hoop.scored) {
+combo = 0;
+return false;
+}
+return hoop.y < H + 60;
+
 });
+for (const particle of particles) {
+particle.x += particle.vx * dt;
+particle.y += particle.vy * dt;
+particle.life -= dt;
+}
 particles = particles.filter((particle) => particle.life > 0);
+level = Math.floor(score / 100) + 1;
+updateStats();
 }
-function removeHoop(hoop) {
-const index = hoops.indexOf(hoop);
-if (index !== -1) {
-hoops.splice(index, 1);
+function circleHitsPlayer(meteor) {
+const closestX = Math.max(
+player.x - 22,
+Math.min(meteor.x, player.x + 22)
+);
+const closestY = Math.max(
+player.y - 38,
+Math.min(meteor.y, player.y + 20)
+);
+const dx = meteor.x - closestX;
+const dy = meteor.y - closestY;
+return dx * dx + dy * dy < meteor.radius * meteor.radius;
+}
+function checkBasketScored() {
+for (const ball of balls) {
+for (const hoop of hoops) {
+const passedThrough =
+ball.x > hoop.x &&
+ball.x < hoop.x + hoop.width &&
+ball.y > hoop.y &&
+ball.y < hoop.y + hoop.height &&
+!hoop.scored;
+  if (passedThrough) {
+    hoop.scored = true;
+    score += 25 + combo * 5;
+    combo++;
+
+    explode(ball.x, ball.y, "#ffdc5e");
+
+    balls = balls.filter((item) => item !== ball);
+    break;
+  }
+}
+
 }
 }
-function createExplosion(x, y, color) {
+function explode(x, y, color) {
 for (let i = 0; i < 18; i++) {
 const angle = Math.random() * Math.PI * 2;
-const speed = Math.random() * 0.25 + 0.05;
+const speed = 40 + Math.random() * 100;
 particles.push({
   x,
   y,
+  vx: Math.cos(angle) * speed,
+  vy: Math.sin(angle) * speed,
+  size: 3 + Math.random() * 4,
   color,
-  size: Math.random() * 5 + 2,
-  velocityX: Math.cos(angle) * speed,
-  velocityY: Math.sin(angle) * speed,
-  life: 700
+  life: 0.7
 });
 
 }
 }
 function endGame() {
+running = false;
 gameOver = true;
-gameRunning = false;
 startButton.textContent = "Play Again";
 }
 function updateStats() {
@@ -247,36 +230,38 @@ levelDisplay.textContent = level;
 comboDisplay.textContent = combo;
 }
 function draw() {
-drawSpace();
+drawBackground();
 drawHoops();
 drawMeteors();
 drawBalls();
 drawPlayer();
 drawParticles();
-if (!gameRunning && !gameOver) {
-drawOverlay("METEOR HOOPS", "Click Start Game to begin");
+if (!running && !gameOver) {
+overlay("METEOR HOOPS", "Press Start Game to play");
 }
 if (gameOver) {
-drawOverlay("GAME OVER", Final Score: ${score} — Press R or Play Again);
+overlay("GAME OVER", Score: ${score} — Press Play Again);
 }
 }
-function drawSpace() {
-const gradient = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+function drawBackground() {
+const gradient = ctx.createLinearGradient(0, 0, 0, H);
 gradient.addColorStop(0, "#080b25");
-gradient.addColorStop(1, "#17134a");
+gradient.addColorStop(1, "#1b1550");
 ctx.fillStyle = gradient;
-ctx.fillRect(0, 0, WIDTH, HEIGHT);
-stars.forEach((star) => {
-ctx.fillStyle = rgba(255,255,255,${0.35 + star.size / 4});
+ctx.fillRect(0, 0, W, H);
+for (const star of stars) {
+ctx.fillStyle = "white";
+ctx.globalAlpha = 0.4 + star.size / 4;
 ctx.fillRect(star.x, star.y, star.size, star.size);
-});
+}
+ctx.globalAlpha = 1;
 ctx.fillStyle = "#202b60";
-ctx.fillRect(0, floorY, WIDTH, HEIGHT - floorY);
-ctx.strokeStyle = "#54e6ff";
+ctx.fillRect(0, groundY, W, H - groundY);
+ctx.strokeStyle = "#55eaff";
 ctx.lineWidth = 3;
 ctx.beginPath();
-ctx.moveTo(0, floorY);
-ctx.lineTo(WIDTH, floorY);
+ctx.moveTo(0, groundY);
+ctx.lineTo(W, groundY);
 ctx.stroke();
 }
 function drawPlayer() {
@@ -284,49 +269,46 @@ ctx.save();
 ctx.translate(player.x, player.y);
 ctx.fillStyle = "#5ce1e6";
 ctx.beginPath();
-ctx.moveTo(0, -35);
-ctx.lineTo(-22, 18);
-ctx.lineTo(0, 8);
-ctx.lineTo(22, 18);
+ctx.moveTo(0, -38);
+ctx.lineTo(-23, 20);
+ctx.lineTo(0, 10);
+ctx.lineTo(23, 20);
 ctx.closePath();
 ctx.fill();
 ctx.fillStyle = "#ffdc5e";
 ctx.beginPath();
-ctx.arc(0, -8, 13, 0, Math.PI * 2);
+ctx.arc(0, -10, 13, 0, Math.PI * 2);
 ctx.fill();
 ctx.fillStyle = "#ff8c32";
 ctx.beginPath();
-ctx.arc(0, -8, 8, 0, Math.PI * 2);
+ctx.arc(0, -10, 8, 0, Math.PI * 2);
 ctx.fill();
-ctx.fillStyle = "#ff5b36";
-ctx.fillRect(-9, 18, 18, 11);
 ctx.restore();
 }
 function drawBalls() {
-balls.forEach((ball) => {
+for (const ball of balls) {
 ctx.fillStyle = "#ff8c32";
 ctx.beginPath();
 ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
 ctx.fill();
-ctx.strokeStyle = "#57270e";
+ctx.strokeStyle = "#632b10";
 ctx.lineWidth = 2;
 ctx.beginPath();
 ctx.arc(ball.x, ball.y, ball.radius * 0.65, 0, Math.PI * 2);
 ctx.stroke();
 
-});
+}
 }
 function drawHoops() {
-hoops.forEach((hoop) => {
+for (const hoop of hoops) {
 ctx.shadowColor = "#ffdc5e";
-ctx.shadowBlur = 12;
+ctx.shadowBlur = 14;
 ctx.strokeStyle = "#ffdc5e";
 ctx.lineWidth = 6;
 ctx.strokeRect(hoop.x, hoop.y, hoop.width, hoop.height);
 
 ctx.shadowBlur = 0;
-
-ctx.strokeStyle = "#ffffff";
+ctx.strokeStyle = "white";
 ctx.lineWidth = 2;
 
 for (let x = hoop.x + 8; x < hoop.x + hoop.width; x += 13) {
@@ -336,19 +318,19 @@ for (let x = hoop.x + 8; x < hoop.x + hoop.width; x += 13) {
   ctx.stroke();
 }
 
-});
+}
 }
 function drawMeteors() {
-meteors.forEach((meteor) => {
+for (const meteor of meteors) {
 ctx.save();
 ctx.translate(meteor.x, meteor.y);
 ctx.rotate(meteor.rotation);
-ctx.fillStyle = "#d94b4b";
+ctx.fillStyle = "#dc4d4d";
 ctx.beginPath();
 
 for (let i = 0; i < 9; i++) {
   const angle = (Math.PI * 2 * i) / 9;
-  const radius = meteor.radius * (0.75 + Math.random() * 0.35);
+  const radius = meteor.radius * (0.8 + Math.random() * 0.25);
   const x = Math.cos(angle) * radius;
   const y = Math.sin(angle) * radius;
 
@@ -359,18 +341,18 @@ for (let i = 0; i < 9; i++) {
 ctx.closePath();
 ctx.fill();
 
-ctx.fillStyle = "#ff9b45";
+ctx.fillStyle = "#ffae45";
 ctx.beginPath();
 ctx.arc(-5, -4, 4, 0, Math.PI * 2);
 ctx.fill();
 
 ctx.restore();
 
-});
+}
 }
 function drawParticles() {
-particles.forEach((particle) => {
-ctx.globalAlpha = Math.max(0, particle.life / 700);
+for (const particle of particles) {
+ctx.globalAlpha = Math.max(0, particle.life);
 ctx.fillStyle = particle.color;
 ctx.fillRect(
 particle.x,
@@ -378,25 +360,26 @@ particle.y,
 particle.size,
 particle.size
 );
-});
+}
 ctx.globalAlpha = 1;
 }
-function drawOverlay(title, message) {
-ctx.fillStyle = "rgba(5, 8, 25, 0.75)";
-ctx.fillRect(0, 0, WIDTH, HEIGHT);
-ctx.fillStyle = "#ffdc5e";
-ctx.font = "bold 46px Arial";
+function overlay(title, subtitle) {
+ctx.fillStyle = "rgba(4, 6, 20, 0.78)";
+ctx.fillRect(0, 0, W, H);
 ctx.textAlign = "center";
-ctx.fillText(title, WIDTH / 2, HEIGHT / 2 - 20);
-ctx.fillStyle = "#ffffff";
+ctx.fillStyle = "#ffdc5e";
+ctx.font = "bold 44px Arial";
+ctx.fillText(title, W / 2, H / 2 - 20);
+ctx.fillStyle = "white";
 ctx.font = "20px Arial";
-ctx.fillText(message, WIDTH / 2, HEIGHT / 2 + 28);
+ctx.fillText(subtitle, W / 2, H / 2 + 25);
 }
-function gameLoop(timestamp) {
-const delta = Math.min(timestamp - lastTime || 16, 40);
-lastTime = timestamp;
-update(delta);
+function gameLoop(time) {
+const dt = Math.min((time - lastTime) / 1000 || 0, 0.05);
+lastTime = time;
+update(dt);
 draw();
 requestAnimationFrame(gameLoop);
 }
+updateStats();
 gameLoop(0);
